@@ -196,7 +196,7 @@ class DeepQLearningAgent:
         self.batch_size = batch_size
         self.memory_size = memory_size
         self.target_update_every = target_update_every
-        self.network=DQN(input_dim=state_shape[0]*state_shape[1], output_dim=n_actions).to(device)
+        self.q_network=DQN(input_dim=state_shape[0]*state_shape[1], output_dim=n_actions).to(device)
         self.memory=[]
     
      
@@ -231,7 +231,7 @@ class DeepQLearningAgent:
         else:
             state_tensor = self.preprocess(state).unsqueeze(0)  # Añadir dimensión de batch
             with torch.no_grad():
-                q_values = self.network.forward(state_tensor)
+                q_values = self.q_network.forward(state_tensor)
             q_values = q_values.cpu().numpy().flatten()
             q_values_valid = [(a, q_values[a]) for a in valid_actions]
             best_action = max(q_values_valid, key=lambda x: x[1])[0]
@@ -271,15 +271,15 @@ class DeepQLearningAgent:
         next_states_tensor = torch.stack([self.preprocess(s) for s in next_states]).to(self.device)
         dones_tensor = torch.tensor(dones, dtype=torch.float32).unsqueeze(1).to(self.device)
 
-        current_q_values = self.network.forward(states_tensor).gather(1, actions_tensor)
+        current_q_values = self.q_network.forward(states_tensor).gather(1, actions_tensor)
         with torch.no_grad():
-            max_next_q_values = self.network.forward(next_states_tensor).max(1)[0].unsqueeze(1)
+            max_next_q_values = self.q_network.forward(next_states_tensor).max(1)[0].unsqueeze(1)
             target_q_values = rewards_tensor + (self.gamma * max_next_q_values * (1 - dones_tensor))
 
         loss_fn = nn.MSELoss()
         loss = loss_fn(current_q_values, target_q_values)
 
-        optimizer = torch.optim.Adam(self.network.parameters(), lr=self.lr)
+        optimizer = torch.optim.Adam(self.q_network.parameters(), lr=self.lr)
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
