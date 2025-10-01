@@ -119,7 +119,8 @@ class Connect4Environment:
         else:
             reward = 0  # Juego continúa
         
-        return self.state.copy(), reward, self.state.termino_el_juego, self.state.ganador
+        return self.state.copy(), reward, self.state.termino_el_juego, {"winner": self.state.ganador}
+
 
     def render(self):
             """
@@ -296,27 +297,26 @@ class DeepQLearningAgent:
 
 class TrainedAgent(Agent):
     def __init__(self, model_path: str, state_shape: tuple, n_actions: int, device='cpu'):
-        """
-        Inicializa un agente DQN pre-entrenado.
+        self.device = device
+        self.state_shape = state_shape
+        self.n_actions = n_actions
         
-        Args:
-            model_path: Ruta al archivo del modelo entrenado.
-            state_shape: Forma del estado del juego.
-            n_actions: Número de acciones posibles.
-            device: Dispositivo para computación.
-        """
-
-        pass
-
-    def play(self, state, valid_actions): 
-        """
-        Selecciona la mejor acción según el modelo entrenado.
+        # Inicializar la red y cargar pesos
+        self.q_network = DQN(input_dim=state_shape[0]*state_shape[1], output_dim=n_actions).to(device)
+        self.q_network.load_state_dict(torch.load(model_path, map_location=device))
+        self.q_network.eval()  # Para que no haga dropout ni batchnorm si hubiese
         
-        Args:
-            state: Estado actual del juego.
-            valid_actions: Lista de acciones válidas.
-            
-        Returns:
-            Índice de la mejor acción según el modelo.
-        """
-        pass
+        self.name = f"TrainedAgent_{model_path}"
+
+    def play(self, state, valid_actions):
+        # Convertimos el estado a tensor
+        state_array = state.board.flatten()
+        state_tensor = torch.tensor(state_array, dtype=torch.float32).to(self.device).unsqueeze(0)
+        
+        with torch.no_grad():
+            q_values = self.q_network(state_tensor).cpu().numpy().flatten()
+        
+        # Solo consideramos las acciones válidas
+        q_values_valid = [(a, q_values[a]) for a in valid_actions]
+        best_action = max(q_values_valid, key=lambda x: x[1])[0]
+        return best_action
